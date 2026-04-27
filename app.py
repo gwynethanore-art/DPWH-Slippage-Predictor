@@ -1,70 +1,62 @@
 import streamlit as st
 import requests
 
-st.set_page_config(page_title="DPWH-NCR Slippage Predictor", layout="wide")
+st.set_page_config(page_title="DPWH Project Tool", layout="centered")
+st.title("🏗️ Project Planning & Monitoring Tool")
 
-# Title and Branding
-st.title("🏗️ Hybrid AHP-ANN Slippage Prediction System")
-st.markdown("### Development of a Predictive Model for DPWH Road Construction Projects")
-st.write("---")
-
+# ILAGAY ANG PINAKABAGONG NGROK LINK DITO
 API_URL = "https://willing-finch-fool.ngrok-free.dev/predict" 
 
-# --- SIDEBAR: PROJECT OVERVIEW ---
-with st.sidebar:
-    st.header("Project Metadata")
-    actual_cost = st.number_input("Contract Amount (PHP)", value=15000000.0, step=500000.0)
-    actual_dur = st.number_input("Original Duration (Days)", value=180, step=10)
-    
-    # Hidden Auto-Normalization (Para tama ang results)
-    norm_cost = actual_cost / 50000000  # Max cost in training data
-    norm_dur = actual_dur / 1000        # Max duration in training data
-
-# --- MAIN PANEL: RISK ASSESSMENT ---
-st.subheader("📋 Risk Indicator Assessment")
-st.info("Rate the following indicators based on site inspection and project evaluation (1 = Very Low, 5 = Very High)")
-
+# --- INPUT SECTION ---
+st.subheader("Project Parameters")
 col1, col2 = st.columns(2)
-
 with col1:
-    st.write("**⚠️ Environmental & Site Risks**")
-    r28 = st.select_slider("Risk 28: Weather Conditions", options=[1, 2, 3, 4, 5], value=3)
-    r07 = st.select_slider("Risk 07: Site Accessibility", options=[1, 2, 3, 4, 5], value=2)
-    r15 = st.select_slider("Risk 15: Right-of-Way (ROW) Issues", options=[1, 2, 3, 4, 5], value=1)
-    # Pwede nating dagdagan dito yung iba pang Risks niyo...
-
+    actual_cost = st.number_input("Contract Amount (PHP)", value=5000000.0)
 with col2:
-    st.write("**⚙️ Resource & Technical Risks**")
-    r27 = st.select_slider("Risk 27: Equipment Breakdown", options=[1, 2, 3, 4, 5], value=2)
-    r09 = st.select_slider("Risk 09: Labor Shortage", options=[1, 2, 3, 4, 5], value=3)
-    r23 = st.select_slider("Risk 23: Material Delivery Delays", options=[1, 2, 3, 4, 5], value=2)
+    actual_duration = st.number_input("Contract Duration (Days)", value=180)
 
-# --- PRE-SET AHP WEIGHTS (Based on your Research) ---
-# Ito yung sinasabi mong hindi na dapat alam ng user
-ahp_weights = [0.154, 0.210, 0.098, 0.245, 0.143, 0.150] 
+st.write("---")
+st.subheader("Risk & Monitoring Profile")
 
-if st.button("RUN PREDICTIVE ANALYSIS", use_container_width=True):
-    # Dito natin bubuuin yung saktong 26 variables para sa AI
-    # (Example order: 18 Risks + 6 Weights + Cost + Duration)
-    # Gagamit muna tayo ng placeholder values (0.05) sa ibang risks na hindi natin nilagyan ng slider para gumana
-    risk_inputs = [r28/5, r07/5, r15/5, r27/5, r09/5, r23/5] + ([0.05] * 12)
-    final_inputs = risk_inputs + ahp_weights + [norm_cost, norm_dur]
+# ISANG SLIDER LANG PARA SA LAHAT NG RISKS
+overall_risk = st.select_slider(
+    "How would you rate the site's overall risk level?",
+    options=["Very Low", "Low", "Average", "High", "Critical"],
+    value="Average"
+)
+
+# I-convert ang text sa number (0.2 to 1.0)
+risk_map = {"Very Low": 0.2, "Low": 0.4, "Average": 0.6, "High": 0.8, "Critical": 1.0}
+normalized_risk = risk_map[overall_risk]
+
+if st.button("PREDICT SLIPPAGE", use_container_width=True):
+    # 1. Automatic Normalization (I-adjust base sa max values ng training data niyo)
+    # Halimbawa: kung 50M ang max cost sa training, i-divide sa 50,000,000
+    norm_cost = actual_cost / 50000000 
+    norm_duration = actual_duration / 1000
+    
+    # 2. Binuo ang 26 inputs sa background:
+    # 18 Risks (Pare-parehong score base sa slider)
+    risk_inputs = [normalized_risk] * 18
+    # 6 AHP Weights (Average values mula sa CSV niyo)
+    ahp_weights = [0.15, 0.20, 0.10, 0.25, 0.15, 0.15]
+    
+    # Pagsasama-samahin lahat (Total: 26)
+    final_inputs = risk_inputs + ahp_weights + [norm_cost, norm_duration]
     
     try:
         response = requests.post(API_URL, json={"inputs": final_inputs})
         if response.status_code == 200:
             res = response.json()['slippage'] * 100
             
-            st.write("---")
-            st.markdown(f"## Predicted Slippage: **{res:.2f}%**")
+            # THE "SENSE" OF THE MODEL:
+            st.metric("PREDICTED FINAL SLIPPAGE", f"{res:.2f}%")
             
             if res > 15:
-                st.error("🚨 **CRITICAL SLIPPAGE:** Project is significantly behind schedule.")
-            elif res > 5:
-                st.warning("⚠️ **MODERATE SLIPPAGE:** Needs close monitoring.")
+                st.error("⚠️ CRITICAL: It is not recommended to start the project with these parameters. Re-evaluate the duration.")
             else:
-                st.success("✅ **ON TRACK:** Project is within safe limits.")
+                st.success("✅ FEASIBLE: The project timeline is realistic for this budget.")
         else:
-            st.error("Error connecting to AI. Please check Colab.")
+            st.error("AI is not responding. Check Colab.")
     except:
-        st.error("The 'Brain' (Google Colab) is currently offline.")
+        st.error("Connection failed.")
