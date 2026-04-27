@@ -8,7 +8,7 @@ st.title("🏗️ Project Monitoring & Slippage Predictor")
 st.markdown("### Hybrid AHP-ANN Predictive Analytics for DPWH-NCR")
 st.write("---")
 
-# ⚠️ PAALALA: Palitan ang URL na ito base sa Ngrok link mula sa Colab mo!
+# ⚠️ PAALALA: Siguraduhin na ito ang link mula sa Colab terminal mo ngayon!
 API_URL = "https://willing-finch-fool.ngrok-free.dev/predict" 
 
 # Layout para sa Inputs
@@ -29,12 +29,13 @@ with col2:
     st.info("Rate the site conditions based on AHP intensity (1 = Low Risk, 5 = High Risk)")
     risk_level = st.select_slider("Current Risk Intensity", options=[1, 2, 3, 4, 5], value=1)
     
-    # Simple logic display for current status
-    current_delay = actual_day - target_day
-    if current_delay > 0:
-        st.warning(f"Current Status: Project is {current_delay} days BEHIND schedule.")
-    elif current_delay < 0:
-        st.success(f"Current Status: Project is {abs(current_delay)} days ADVANCED.")
+    # Logic Display para sa Current Status
+    # Slippage = (Target - Actual). Pag negative, advanced. Pag positive, delayed.
+    diff = target_day - actual_day
+    if diff < 0:
+        st.success(f"Current Status: Project is {abs(diff)} days ADVANCED.")
+    elif diff > 0:
+        st.warning(f"Current Status: Project is {diff} days BEHIND schedule.")
     else:
         st.info("Current Status: Project is ON SCHEDULE.")
 
@@ -46,7 +47,7 @@ if st.button("GENERATE PREDICTION REPORT", use_container_width=True):
         st.error("Please provide valid Budget and Duration values.")
     else:
         with st.spinner("AI is analyzing historical data and risks..."):
-            # 1. Normalization (Manual Scaling para iwas 100% error)
+            # 1. Normalization (Scaling)
             n_budget = budget / 50000000.0
             n_duration = duration / 1000.0
             n_risk = risk_level / 5.0
@@ -63,22 +64,23 @@ if st.button("GENERATE PREDICTION REPORT", use_container_width=True):
                 if response.status_code == 200:
                     ai_forecast_dec = response.json()['slippage']
                     
-                    # 4. CALCULATION LOGIC
-                    # Math: (Actual - Target) / Duration
-                    current_slip_dec = (actual_day - target_day) / duration if duration > 0 else 0
+                    # 4. CORRECTED CALCULATION LOGIC
+                    # Engineering Formula: (Target - Actual) / Duration
+                    # Result < 0 means Advanced. Result > 0 means Delayed.
+                    current_slip_dec = (target_day - actual_day) / duration if duration > 0 else 0
                     
-                    # CALIBRATION: Binabawasan ang "bias" ng AI base sa Risk Level
-                    if risk_level == 1 and actual_day <= target_day:
-                        calibrated_ai = ai_forecast_dec * 0.05  # 5% influence lang
+                    # CALIBRATION FACTOR
+                    if risk_level == 1 and current_slip_dec <= 0:
+                        calibrated_ai = ai_forecast_dec * 0.05  # 5% lang influence ng AI pag low risk/advanced
                     elif risk_level <= 3:
                         calibrated_ai = ai_forecast_dec * 0.25  # 25% influence
                     else:
                         calibrated_ai = ai_forecast_dec * 1.0   # Full influence pag high risk
                     
-                    # Final Formula
+                    # Total Final Slippage Prediction
                     total_slippage = (current_slip_dec + calibrated_ai) * 100
                     
-                    # Hard Caps for realism
+                    # Limits for realism
                     total_slippage = max(min(total_slippage, 100.0), -100.0)
 
                     # 5. Display Results
@@ -93,12 +95,12 @@ if st.button("GENERATE PREDICTION REPORT", use_container_width=True):
                         st.markdown("Close monitoring is recommended.")
                     elif total_slippage < 0:
                         st.success(f"🚀 **EXCELLENT:** Project is predicted to be ADVANCED by {abs(total_slippage):.2f}%.")
-                        st.markdown("Current efficiency suggests project completion ahead of schedule.")
+                        st.markdown("Current efficiency suggests early completion.")
                     else:
-                        st.success("✅ **STABLE STATUS:** Project performance is healthy.")
+                        st.success("✅ **STABLE STATUS:** Project performance is within healthy bounds.")
                         st.markdown("No significant slippage predicted.")
                 else:
-                    st.error(f"API Error: {response.json().get('error', 'Check model file in Colab')}")
+                    st.error(f"API Error: {response.json().get('error', 'Check your Colab server.')}")
             except Exception as e:
                 st.error(f"Connection Error: Ensure your Ngrok link is updated and Colab is running.")
 
