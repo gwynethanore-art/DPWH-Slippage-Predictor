@@ -1,62 +1,73 @@
 import streamlit as st
 import requests
 
-st.set_page_config(page_title="DPWH Project Tool", layout="centered")
-st.title("🏗️ Project Planning & Monitoring Tool")
+st.set_page_config(page_title="DPWH Monitoring Tool", layout="wide")
+st.title("🏗️ Project Monitoring & Slippage Forecaster")
 
-# ILAGAY ANG PINAKABAGONG NGROK LINK DITO
+# UPDATE MO ITO SA ACTIVE NGROK LINK MO
 API_URL = "https://willing-finch-fool.ngrok-free.dev/predict" 
 
-# --- INPUT SECTION ---
-st.subheader("Project Parameters")
 col1, col2 = st.columns(2)
+
 with col1:
-    actual_cost = st.number_input("Contract Amount (PHP)", value=5000000.0)
+    st.subheader("📅 Project Schedule")
+    budget = st.number_input("Contract Budget (PHP)", value=3000000.0)
+    planned_dur = st.number_input("Original Duration (Days)", value=180)
+    
+    st.write("---")
+    st.subheader("⏱️ Current Progress Tracker")
+    # Dito na papasok yung example mo na Day 50 vs 60, pero flexible kahit anong number
+    target_day = st.number_input("Target Day (Where should we be today?)", value=0)
+    actual_day = st.number_input("Actual Day (What day is it today?)", value=0)
+    
+    # Automatic Math for current delay
+    current_delay = actual_day - target_day
+    if planned_dur > 0:
+        current_slippage_pct = (current_delay / planned_dur) * 100
+    else:
+        current_slippage_pct = 0
+
 with col2:
-    actual_duration = st.number_input("Contract Duration (Days)", value=180)
-
-st.write("---")
-st.subheader("Risk & Monitoring Profile")
-
-# ISANG SLIDER LANG PARA SA LAHAT NG RISKS
-overall_risk = st.select_slider(
-    "How would you rate the site's overall risk level?",
-    options=["Very Low", "Low", "Average", "High", "Critical"],
-    value="Average"
-)
-
-# I-convert ang text sa number (0.2 to 1.0)
-risk_map = {"Very Low": 0.2, "Low": 0.4, "Average": 0.6, "High": 0.8, "Critical": 1.0}
-normalized_risk = risk_map[overall_risk]
-
-if st.button("PREDICT SLIPPAGE", use_container_width=True):
-    # 1. Automatic Normalization (I-adjust base sa max values ng training data niyo)
-    # Halimbawa: kung 50M ang max cost sa training, i-divide sa 50,000,000
-    norm_cost = actual_cost / 50000000 
-    norm_duration = actual_duration / 1000
+    st.subheader("⚠️ Site Conditions (Risk Factors)")
+    st.write("Rate the intensity of risks affecting the project today:")
+    # 1 to 5 scale para user-friendly
+    risk_level = st.select_slider("Current Risk Intensity (1=Low, 5=High)", options=[1, 2, 3, 4, 5], value=3)
     
-    # 2. Binuo ang 26 inputs sa background:
-    # 18 Risks (Pare-parehong score base sa slider)
-    risk_inputs = [normalized_risk] * 18
-    # 6 AHP Weights (Average values mula sa CSV niyo)
-    ahp_weights = [0.15, 0.20, 0.10, 0.25, 0.15, 0.15]
+    if current_delay > 0:
+        st.warning(f"Project is currently {current_delay} days BEHIND schedule.")
+    elif current_delay < 0:
+        st.success(f"Project is {abs(current_delay)} days AHEAD of schedule.")
+
+# --- CALCULATION LOGIC ---
+if st.button("CALCULATE FINAL PREDICTION", use_container_width=True):
+    # Hidden Logic para sa 26 inputs
+    norm_cost = budget / 50000000 
+    norm_dur = planned_dur / 1000
+    risk_inputs = [risk_level / 5] * 18
+    weights = [0.154, 0.210, 0.098, 0.245, 0.143, 0.150]
     
-    # Pagsasama-samahin lahat (Total: 26)
-    final_inputs = risk_inputs + ahp_weights + [norm_cost, norm_duration]
+    final_inputs = risk_inputs + weights + [norm_cost, norm_dur]
     
     try:
         response = requests.post(API_URL, json={"inputs": final_inputs})
         if response.status_code == 200:
-            res = response.json()['slippage'] * 100
+            ai_forecast = response.json()['slippage'] * 100
             
-            # THE "SENSE" OF THE MODEL:
-            st.metric("PREDICTED FINAL SLIPPAGE", f"{res:.2f}%")
+            # TOTAL SLIPPAGE = Current Delay + Predicted Future Delay
+            total_slippage = current_slippage_pct + ai_forecast
             
-            if res > 15:
-                st.error("⚠️ CRITICAL: It is not recommended to start the project with these parameters. Re-evaluate the duration.")
+            # Limit results para hindi lumampas sa reality
+            if total_slippage > 100: total_slippage = 100.0
+            if total_slippage < -100: total_slippage = -100.0
+
+            st.write("---")
+            st.markdown(f"## Predicted Final Slippage: **{total_slippage:.2f}%**")
+            
+            if total_slippage > 15:
+                st.error("🚨 **CRITICAL STATUS:** High probability of significant project delay.")
+            elif total_slippage > 5:
+                st.warning("⚠️ **WATCH STATUS:** Moderate slippage detected. Monitoring required.")
             else:
-                st.success("✅ FEASIBLE: The project timeline is realistic for this budget.")
-        else:
-            st.error("AI is not responding. Check Colab.")
+                st.success("✅ **STABLE STATUS:** Project is performing within acceptable limits.")
     except:
-        st.error("Connection failed.")
+        st.error("AI is not responding. Make sure Google Colab and Ngrok are running.")
