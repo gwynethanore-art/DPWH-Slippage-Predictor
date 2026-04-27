@@ -69,4 +69,3 @@ if st.button("RUN PREDICTION"):
                 st.success("✅ **STABLE:** Project is on track.")
     except Exception as e:
         st.error(f"Error: {e}")
-        st.error("AI Server Offline. Check Colab/Ngrok.")
